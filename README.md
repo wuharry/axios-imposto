@@ -1,4 +1,4 @@
-[繁體中文](./README.zh-TW.md) | **English**
+[繁體中文](https://github.com/你的GitHub帳號/axios-impostor/blob/main/README.zh-TW.md) | **English**
 
 # Axios Impostor 🎭
 

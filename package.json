@@ -19,7 +19,8 @@
     "prepare": "husky"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.zh-TW.md"
   ],
   "keywords": [],
   "author": "",
@@ -28,6 +29,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.2.0",
     "@commitlint/config-conventional": "^20.2.0",
+    "@eslint/js": "^9.39.2",
     "@types/node": "^25.0.3",
     "@typescript-eslint/eslint-plugin": "^8.50.0",
     "@typescript-eslint/parser": "^8.50.0",
