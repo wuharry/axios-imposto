@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    /* 基礎設定 */
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    /* 模組解析策略 (Vite 專用) */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+
+    /* 嚴格模式 (Library 開發建議全開) */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* 互操作性 */
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* 路徑別名與 Base 設定 */
+    "baseUrl": "." /* 設定專案根目錄為基礎路徑 */,
+    "paths": {
+      "@/*": ["src/*"] /* 設定 @ 代表 src 資料夾 */
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
