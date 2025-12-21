@@ -3,9 +3,12 @@ import type {
   CustomRequestInit,
   ErrorResponse,
   InterceptorManager,
+  SSEConnection,
+  SSEOptions,
 } from '../types';
 
 import { buildURL } from '../utils/buildURL';
+import { parseSSEMessage } from '@/utils/parseSSE';
 import { createInterceptorManager } from './interceptor';
 
 export const createFetchClient = ({
@@ -30,6 +33,7 @@ export const createFetchClient = ({
   const request = async (
     endpoint: string,
     options: CustomRequestInit = {},
+    isStream = false,
   ): Promise<Response | null> => {
     // 1. 從 options 解構出 timeout 和 headers，並給予預設值, 其他的放在 customConfig 裡像是 method, body 等等
     const { timeout = defaultTimeout, headers = {}, ...customConfig } = options;
@@ -39,8 +43,14 @@ export const createFetchClient = ({
      * 我們利用 setTimeout 在超時後觸發 controller.abort()
      */
     const controller = new AbortController();
-    // 設定 timeout, 超時後中止請求
-    const id = setTimeout(() => controller.abort(), timeout);
+
+    // ✅ 使用 number 類型，相容瀏覽器和 Node.js
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    // 設定 timeout, 超時後中止請求(如果不是 stream 請求)
+    if (!isStream) {
+      timeoutId = setTimeout(() => controller.abort(), timeout);
+    }
 
     const url = buildURL(baseURL, endpoint);
 
@@ -72,6 +82,7 @@ export const createFetchClient = ({
       } as HeadersInit,
       signal: controller.signal,
       timeout,
+      isStream,
     };
 
     // ------------------------------------------------------------
@@ -98,8 +109,9 @@ export const createFetchClient = ({
       let response = await fetch(url, config);
 
       // 請求成功回應，清除 timeout 計時器
-      clearTimeout(id);
-
+      if (!isStream && timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
       // ------------------------------------------------------------
       // 🔄 [流程] 階段 C：執行 Response Interceptors (回應攔截器)
       // ------------------------------------------------------------
@@ -117,6 +129,11 @@ export const createFetchClient = ({
       // * 3. 等待所有攔截器跑完，拿到最終處理過的 Response
       response = await responsePromise;
 
+      // ✅ 如果是 Stream，直接返回 response，不做額外處理
+      if (isStream) {
+        return response;
+      }
+
       // ------------------------------------------------------------
       // 🛡️ [流程] 階段 D：統一錯誤處理
       // ------------------------------------------------------------
@@ -132,7 +149,7 @@ export const createFetchClient = ({
       return response;
     } catch (error: unknown) {
       // 發生錯誤，務必清除 timeout 避免內存洩漏
-      clearTimeout(id);
+      clearTimeout(timeoutId);
 
       /**
        * 💡 [說明] Timeout 錯誤轉換
@@ -155,7 +172,107 @@ export const createFetchClient = ({
       request: requestInterceptors,
       response: responseInterceptors,
     },
+    /**
+     * ✅ SSE 專用方法
+     * Why: 解決 EventSource 無法帶 Header 的問題，並處理串流解析
+     * What: 建立長連線，持續監聽 server 推送的 data
+     */
+    sse: (endpoint: string, options: SSEOptions): SSEConnection => {
+      const { onOpen, onMessage, onError, onClose, ...requestOptions } = options;
+      let readyState: 'connecting' | 'open' | 'closed' = 'connecting';
+      // 瀏覽器原生 的 API
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+      let isClosed = false; // 預防競態條件, 確保 close 只執行一次,不會同時呼叫多次
 
+      const connection: SSEConnection = {
+        close: () => {
+          if (isClosed) return;
+          isClosed = true;
+          readyState = 'closed';
+
+          if (reader) {
+            // 取消讀取器，這會讓瀏覽器中斷 HTTP 連線
+            reader.cancel().catch(() => {
+              /* empty */
+            });
+            reader = null;
+          }
+          onClose?.();
+        },
+        get readyState() {
+          return readyState;
+        },
+      };
+      // IIFE: 立即執行，背景連線
+      void (async () => {
+        try {
+          const response = await request(
+            endpoint,
+            {
+              ...requestOptions,
+              method: 'GET', // SSE 必須是 GET
+              headers: {
+                ...requestOptions.headers,
+                Accept: 'text/event-stream',
+                'Cache-Control': 'no-cache',
+              },
+            },
+            true, // isStream = true
+          );
+          // 如果 response 是 undefined，response?.body 就是 undefined，!undefined 就是 true (報錯)。
+          // 如果 body 是 null，!null 也是 true (報錯)。
+          if (!response?.body) {
+            throw new Error('ReadableStream not supported');
+          }
+
+          if (!response.ok) {
+            throw new Error(`SSE error: ${response.status}`);
+          }
+
+          readyState = 'open';
+          onOpen?.();
+
+          reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          while (!isClosed) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            buffer += chunk;
+
+            // 1. 切割每一條完整的 SSE 訊息 (以 \n\n 分界)
+            const parts = buffer.split('\n\n');
+
+            // 2. 把最後一塊(可能不完整)留回 buffer 等下一波
+            buffer = parts.pop() ?? '';
+
+            // 3. 處理切下來的每一塊
+            for (const part of parts) {
+              if (!part.trim()) continue;
+
+              const message = parseSSEMessage(part);
+
+              if (message) {
+                onMessage(message);
+              }
+            }
+          }
+          connection.close();
+        } catch (error) {
+          if (!isClosed) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            onError?.(err);
+            connection.close();
+          }
+        }
+      })();
+
+      // 立刻回傳控制物件，不讓 UI 等待
+      return connection;
+    },
     get: async <TResponse>(
       endpoint: string,
       options: CustomRequestInit = {},
