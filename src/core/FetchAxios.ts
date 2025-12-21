@@ -8,7 +8,7 @@ import type {
 } from '../types';
 
 import { buildURL } from '../utils/buildURL';
-import { parseSSEMessage } from '@/utils/parseSSE';
+import { parseSSEMessage } from '../utils/parseSSE';
 import { createInterceptorManager } from './interceptor';
 
 export const createFetchClient = ({
