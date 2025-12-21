@@ -1,3 +1,5 @@
+// src/types/index.ts
+
 /**
  * CustomRequestInit 繼承自原生的 RequestInit
  * * @description
@@ -11,24 +13,50 @@
  * - cache?: 'default' | 'no-store' | 'reload' ... (快取策略)
  */
 export interface CustomRequestInit extends RequestInit {
-  /** * 自定義的請求超時時間 (單位: 毫秒)
-   * @note 原生 fetch 不支援此屬性，這是我們封裝層手動實作的功能
-   */
+  /** 自定義的請求超時時間 (單位: 毫秒) */
   timeout?: number;
 }
 
 export interface CreateFetchClientProp {
-  baseURL?: string; // 允許不傳，預設使用環境變數
-  headers?: HeadersInit; // 使用原生的 HeadersInit 型別
-  timeout?: number; // 單位毫秒 (ms)
+  baseURL?: string;
+  headers?: HeadersInit;
+  timeout?: number;
+  /**
+   * 控制是否傳送 Cookie
+   * - 'omit': 不傳送
+   * - 'same-origin': 同源才傳送 (預設)
+   * - 'include': 跨域也傳送 (對應 axios 的 withCredentials: true)
+   */
+  credentials?: RequestCredentials;
 }
 
+/**
+ * 單個攔截器的處理函式定義
+ */
 export interface InterceptorHandler<T> {
   fulfilled: (value: T) => T | Promise<T>;
-
-  // 失敗時：
-  // 1. error 型別設為 unknown
-  // 2. 回傳值設為 any，因為我們無法預測使用者在錯誤處理後會回傳什麼 (可能是修正後的 T，也可能是新的錯誤)
-  // 用 any，為了極致的相容性。
   rejected?: (error: unknown) => any;
+}
+
+/**
+ * ✅  攔截器管理器介面
+ * 這是 createInterceptorManager 回傳的物件形狀
+ */
+export interface InterceptorManager<T> {
+  // 註冊攔截器，回傳 ID
+  use: (fulfilled: (value: T) => T | Promise<T>, rejected?: (error: unknown) => any) => number;
+
+  // 移除攔截器
+  eject: (id: number) => void;
+
+  // 內部使用：遍歷執行
+  forEach: (fn: (handler: InterceptorHandler<T>) => void) => void;
+}
+
+/**
+ * API 錯誤回應介面
+ */
+export interface ErrorResponse {
+  message?: string;
+  error?: string;
 }

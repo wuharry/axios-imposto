@@ -1,4 +1,10 @@
-import type { CustomRequestInit, CreateFetchClientProp } from '../types';
+import type {
+  CreateFetchClientProp,
+  CustomRequestInit,
+  ErrorResponse,
+  InterceptorManager,
+} from '../types';
+
 import { buildURL } from '../utils/buildURL';
 import { createInterceptorManager } from './interceptor';
 
@@ -6,11 +12,12 @@ export const createFetchClient = ({
   baseURL = '',
   headers: defaultHeaders = {},
   timeout: defaultTimeout = 10000,
+  credentials: defaultCredentials = 'same-origin',
 }: CreateFetchClientProp = {}) => {
   // 初始化攔截器管理器
-  const requestInterceptors = createInterceptorManager<CustomRequestInit>();
-  const responseInterceptors = createInterceptorManager<Response>();
-
+  const requestInterceptors: InterceptorManager<CustomRequestInit> =
+    createInterceptorManager<CustomRequestInit>();
+  const responseInterceptors: InterceptorManager<Response> = createInterceptorManager<Response>();
   /**
    * 💡 [核心功能]
    * 這是內部使用的通用 request 函式，負責處理所有的底層邏輯：
@@ -50,6 +57,8 @@ export const createFetchClient = ({
 
     // 2. 組合最終 Config
     let config: CustomRequestInit = {
+      // 優先權：單次請求 > 全域設定 > 預設值
+      credentials: defaultCredentials, // ✅ 注入 credentials 設定
       ...customConfig,
       headers: {
         // * 層級 1：程式自動判斷的 Content-Type
@@ -73,7 +82,10 @@ export const createFetchClient = ({
     let configPromise = Promise.resolve(config);
 
     requestInterceptors.forEach((interceptor) => {
-      configPromise = configPromise.then(interceptor.fulfilled, interceptor.rejected);
+      configPromise = configPromise.then(
+        interceptor.fulfilled,
+        interceptor.rejected,
+      ) as Promise<CustomRequestInit>;
     });
 
     // * 3. 等待所有攔截器跑完，拿到最終處理過的 Config
@@ -96,7 +108,10 @@ export const createFetchClient = ({
       let responsePromise = Promise.resolve(response);
 
       responseInterceptors.forEach((interceptor) => {
-        responsePromise = responsePromise.then(interceptor.fulfilled, interceptor.rejected);
+        responsePromise = responsePromise.then(
+          interceptor.fulfilled,
+          interceptor.rejected,
+        ) as Promise<Response>;
       });
 
       // * 3. 等待所有攔截器跑完，拿到最終處理過的 Response
@@ -107,8 +122,8 @@ export const createFetchClient = ({
       // ------------------------------------------------------------
       // * 1. 檢查 HTTP 狀態碼 (攔截器之後執行，這樣攔截器可以優先處理 401 等狀況)
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.message || `HTTP Error: ${response.status}`);
+        const errorBody = (await response.json().catch(() => null)) as ErrorResponse | null;
+        throw new Error(errorBody?.message ?? `HTTP Error: ${response.status}`);
       }
 
       // * 2. 特殊狀態碼處理 (204 No Content 回傳 null)
