@@ -331,6 +331,28 @@ export const createFetchClient = ({
       });
       return response ? ((await response.json()) as TResponse) : (null as TResponse);
     },
+    patch: async <TResponse, TBody = Record<string, unknown>>(
+      endpoint: string,
+      body?: TBody,
+      options: CustomRequestInit = {},
+    ): Promise<TResponse> => {
+      let bodyToSend: string | FormData | undefined;
+
+      if (body instanceof FormData) {
+        bodyToSend = body;
+      } else if (body) {
+        bodyToSend = JSON.stringify(body);
+      } else {
+        bodyToSend = undefined;
+      }
+
+      const response = await request(endpoint, {
+        ...options,
+        method: 'PATCH',
+        body: bodyToSend,
+      });
+      return response ? ((await response.json()) as TResponse) : (null as TResponse);
+    },
 
     delete: async <TResponse>(
       endpoint: string,

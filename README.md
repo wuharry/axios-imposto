@@ -64,10 +64,16 @@ const newUser = await api.post<User>('/users', {
   email: 'john@example.com',
 });
 
-// PUT request
+// PUT request (complete replacement)
 const updatedUser = await api.put<User>('/users/1', {
   name: 'Jane Doe',
   email: 'jane@example.com',
+  age: 25, // PUT requires all fields
+});
+
+// PATCH request (partial update)
+const partialUpdate = await api.patch<User>('/users/1', {
+  name: 'Jane Doe', // Only update name, other fields remain unchanged
 });
 
 // DELETE request
@@ -209,6 +215,7 @@ interface CreateFetchClientProp {
   get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
   post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
+  patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
 
   // SSE method
@@ -221,6 +228,16 @@ interface CreateFetchClientProp {
   }
 }
 ```
+
+### HTTP Methods Description
+
+| Method | Purpose              | Body Required | Description                                                   |
+| ------ | -------------------- | ------------- | ------------------------------------------------------------- |
+| GET    | Retrieve resource    | ❌            | Used for querying data                                        |
+| POST   | Create resource      | ✅            | Used for creating new data                                    |
+| PUT    | Complete replacement | ✅            | Requires all fields; omitted fields will be removed           |
+| PATCH  | Partial update       | ✅            | Only requires fields to update; other fields remain unchanged |
+| DELETE | Delete resource      | ❌            | Used for deleting data                                        |
 
 ### SSEOptions
 
@@ -289,6 +306,7 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 | Automatic JSON Parsing        | ✅              | ✅             |
 | SSE Support                   | ✅              | ❌             |
 | Credentials Control           | ✅              | ✅             |
+| PATCH Method                  | ✅              | ✅             |
 | Request/Response Transform    | ❌              | ✅             |
 | Upload Progress               | ❌              | ✅             |
 

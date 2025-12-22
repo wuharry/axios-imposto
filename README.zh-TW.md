@@ -64,10 +64,16 @@ const newUser = await api.post<User>('/users', {
   email: 'john@example.com',
 });
 
-// PUT 請求
+// PUT 請求 (完整替換資源)
 const updatedUser = await api.put<User>('/users/1', {
   name: 'Jane Doe',
   email: 'jane@example.com',
+  age: 25, // PUT 需要提供所有欄位
+});
+
+// PATCH 請求 (部分更新資源)
+const partialUpdate = await api.patch<User>('/users/1', {
+  name: 'Jane Doe', // 只更新 name，其他欄位保持不變
 });
 
 // DELETE 請求
@@ -209,6 +215,7 @@ interface CreateFetchClientProp {
   get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
   post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
+  patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
 
   // SSE 方法
@@ -221,6 +228,16 @@ interface CreateFetchClientProp {
   }
 }
 ```
+
+### HTTP Methods 說明
+
+| 方法   | 用途         | Body 必需 | 說明                                   |
+| ------ | ------------ | --------- | -------------------------------------- |
+| GET    | 獲取資源     | ❌        | 用於查詢資料                           |
+| POST   | 創建資源     | ✅        | 用於新增資料                           |
+| PUT    | 完整替換資源 | ✅        | 需提供所有欄位，未提供的欄位會被移除   |
+| PATCH  | 部分更新資源 | ✅        | 只需提供要更新的欄位，其他欄位保持不變 |
+| DELETE | 刪除資源     | ❌        | 用於刪除資料                           |
 
 ### SSEOptions
 
@@ -289,6 +306,7 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 | 自動 JSON 解析                | ✅             | ✅             |
 | SSE 支援                      | ✅             | ❌             |
 | Credentials 控制              | ✅             | ✅             |
+| PATCH 方法                    | ✅             | ✅             |
 | Request/Response Transform    | ❌             | ✅             |
 | 上傳進度                      | ❌             | ✅             |
 

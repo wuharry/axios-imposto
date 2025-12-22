@@ -147,3 +147,50 @@ export interface SSEConnection {
    */
   readonly readyState: 'connecting' | 'open' | 'closed';
 }
+
+/**
+ * ✅ [核心] 客戶端實體介面 (對應 AxiosInstance)
+ * 這是 createFetchClient 回傳物件的型別定義
+ */
+export interface FetchClient {
+  /**
+   * 攔截器管理器
+   */
+  interceptors: {
+    request: InterceptorManager<CustomRequestInit>;
+    response: InterceptorManager<Response>;
+  };
+
+  /**
+   * HTTP Methods
+   * TResponse: 預期回傳的資料型別 (JSON)
+   * TBody: 請求 Body 的型別
+   */
+  get: <TResponse>(endpoint: string, options?: CustomRequestInit) => Promise<TResponse>;
+
+  post: <TResponse, TBody = Record<string, unknown>>(
+    endpoint: string,
+    body?: TBody,
+    options?: CustomRequestInit,
+  ) => Promise<TResponse>;
+
+  put: <TResponse, TBody = Record<string, unknown>>(
+    endpoint: string,
+    body?: TBody,
+    options?: CustomRequestInit,
+  ) => Promise<TResponse>;
+
+  // ✅ 新增 PATCH 方法定義
+  patch: <TResponse, TBody = Record<string, unknown>>(
+    endpoint: string,
+    body?: TBody,
+    options?: CustomRequestInit,
+  ) => Promise<TResponse>;
+
+  delete: <TResponse>(endpoint: string, options?: CustomRequestInit) => Promise<TResponse>;
+
+  /**
+   * SSE 專用方法
+   */
+  sse: (endpoint: string, options: SSEOptions) => SSEConnection;
+}
