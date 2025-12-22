@@ -2,7 +2,7 @@
 
 # Axios Impostor 🎭
 
-A lightweight HTTP client based on Fetch API that mimics Axios core features, including `axios.create()` and interceptor mechanisms.
+A lightweight HTTP client based on Fetch API that mimics Axios core features, including `axios.create()`, interceptor mechanisms, and **SSE (Server-Sent Events)** support.
 
 ## ✨ Features
 
@@ -10,8 +10,10 @@ A lightweight HTTP client based on Fetch API that mimics Axios core features, in
 - 🔧 **axios.create() Style** - Familiar API design
 - 🔄 **Request/Response Interceptors** - Full interceptor support
 - ⏱️ **Request Timeout Control** - Customizable timeout settings
+- 📡 **SSE Support** - Built-in Server-Sent Events streaming
 - 📝 **TypeScript Support** - Complete type definitions
 - 🎯 **Smart Content-Type Detection** - Intelligent handling of JSON and FormData
+- 🍪 **Credentials Control** - Support for Cookie and authentication settings
 - 🛡️ **Unified Error Handling** - Consistent error handling mechanism
 
 ## 📦 Installation
@@ -43,6 +45,7 @@ const api = createFetchClient({
     'X-Custom-Header': 'value',
   },
   timeout: 5000, // 5 seconds timeout
+  credentials: 'include', // Allow cross-origin cookies
 });
 
 // GET request
@@ -113,6 +116,43 @@ api.interceptors.response.use(
 );
 ```
 
+### SSE (Server-Sent Events) Support
+
+```typescript
+// Establish SSE connection
+const connection = api.sse('/events', {
+  headers: {
+    Authorization: 'Bearer your-token',
+  },
+  onOpen: () => {
+    console.log('SSE connection established');
+  },
+  onMessage: (message) => {
+    console.log('Message received:', message);
+    // message format: { event?: string; data: string; id?: string; retry?: number }
+  },
+  onError: (error) => {
+    console.error('SSE error:', error);
+  },
+  onClose: () => {
+    console.log('SSE connection closed');
+  },
+});
+
+// Manually close connection
+connection.close();
+
+// Check connection state
+console.log(connection.readyState); // 'connecting' | 'open' | 'closed'
+```
+
+**SSE Advantages:**
+
+- ✅ Supports custom headers (solves native EventSource limitations)
+- ✅ Automatic message parsing
+- ✅ Full lifecycle control
+- ✅ Perfect for AI streaming responses, real-time notifications, etc.
+
 ### FormData Support
 
 ```typescript
@@ -123,6 +163,26 @@ formData.append('name', 'document.pdf');
 
 const response = await api.post('/upload', formData);
 ```
+
+### Credentials Configuration
+
+```typescript
+// Global configuration
+const api = createFetchClient({
+  credentials: 'include', // Allow cross-origin cookies
+});
+
+// Per-request configuration
+const data = await api.get('/api/data', {
+  credentials: 'same-origin', // Send cookies only for same-origin requests
+});
+```
+
+**Credentials Options:**
+
+- `'same-origin'` (default): Send credentials only for same-origin requests
+- `'include'`: Send credentials for cross-origin requests too
+- `'omit'`: Never send credentials
 
 ## 🔧 API Reference
 
@@ -136,7 +196,8 @@ Create a new HTTP client instance.
 interface CreateFetchClientProp {
   baseURL?: string; // Base URL
   headers?: HeadersInit; // Default headers
-  timeout?: number; // Default timeout (milliseconds)
+  timeout?: number; // Default timeout (milliseconds, default 10000)
+  credentials?: RequestCredentials; // Cookie sending strategy (default 'same-origin')
 }
 ```
 
@@ -150,11 +211,32 @@ interface CreateFetchClientProp {
   put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
 
+  // SSE method
+  sse(endpoint: string, options: SSEOptions): SSEConnection
+
   // Interceptors
   interceptors: {
     request: InterceptorManager<CustomRequestInit>
     response: InterceptorManager<Response>
   }
+}
+```
+
+### SSEOptions
+
+```typescript
+interface SSEOptions extends CustomRequestInit {
+  onOpen?: () => void; // Triggered when connection is established
+  onMessage: (message: SSEMessage) => void; // Triggered when message is received
+  onError?: (error: Error) => void; // Triggered when error occurs
+  onClose?: () => void; // Triggered when connection is closed
+}
+
+interface SSEMessage {
+  event?: string; // Event type
+  data: string; // Message content
+  id?: string; // Message ID
+  retry?: number; // Retry time (milliseconds)
 }
 ```
 
@@ -184,6 +266,8 @@ const api = createFetchClient({ timeout: 10000 });
 
 // Per-request setting
 const data = await api.get('/slow-endpoint', { timeout: 30000 });
+
+// ⚠️ Note: SSE connections are not subject to timeout (long-lived connection)
 ```
 
 ### Error Handling
@@ -191,6 +275,7 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 - **HTTP Errors**: Automatically checks `response.ok` and throws appropriate errors
 - **Timeout Errors**: Converts AbortError to readable timeout messages
 - **204 No Content**: Returns `null`
+- **Interceptor Errors**: Can be handled uniformly in interceptors
 
 ## 🔄 Comparison with Axios
 
@@ -202,6 +287,8 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 | Request/Response Interceptors | ✅              | ✅             |
 | Request Timeout               | ✅              | ✅             |
 | Automatic JSON Parsing        | ✅              | ✅             |
+| SSE Support                   | ✅              | ❌             |
+| Credentials Control           | ✅              | ✅             |
 | Request/Response Transform    | ❌              | ✅             |
 | Upload Progress               | ❌              | ✅             |
 

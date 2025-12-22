@@ -2,7 +2,7 @@
 
 # Axios Impostor 🎭
 
-一個基於 Fetch API 的輕量級 HTTP 客戶端，模仿 Axios 的核心功能，包含 `axios.create()` 和 interceptor 機制。
+一個基於 Fetch API 的輕量級 HTTP 客戶端，模仿 Axios 的核心功能，包含 `axios.create()`、interceptor 機制，以及 **SSE (Server-Sent Events)** 支援。
 
 ## ✨ 特性
 
@@ -10,8 +10,10 @@
 - 🔧 **axios.create() 風格** - 熟悉的 API 設計
 - 🔄 **Request/Response Interceptors** - 完整的攔截器支援
 - ⏱️ **請求超時控制** - 可自訂超時時間
+- 📡 **SSE 支援** - 內建 Server-Sent Events 串流處理
 - 📝 **TypeScript 支援** - 完整的型別定義
 - 🎯 **自動 Content-Type 判斷** - 智慧處理 JSON 和 FormData
+- 🍪 **Credentials 控制** - 支援 Cookie 和認證設定
 - 🛡️ **統一錯誤處理** - 一致的錯誤處理機制
 
 ## 📦 安裝
@@ -43,6 +45,7 @@ const api = createFetchClient({
     'X-Custom-Header': 'value',
   },
   timeout: 5000, // 5秒超時
+  credentials: 'include', // 允許跨域發送 Cookie
 });
 
 // GET 請求
@@ -113,6 +116,43 @@ api.interceptors.response.use(
 );
 ```
 
+### SSE (Server-Sent Events) 支援
+
+```typescript
+// 建立 SSE 連線
+const connection = api.sse('/events', {
+  headers: {
+    Authorization: 'Bearer your-token',
+  },
+  onOpen: () => {
+    console.log('SSE 連線已建立');
+  },
+  onMessage: (message) => {
+    console.log('收到訊息:', message);
+    // message 格式: { event?: string; data: string; id?: string; retry?: number }
+  },
+  onError: (error) => {
+    console.error('SSE 錯誤:', error);
+  },
+  onClose: () => {
+    console.log('SSE 連線已關閉');
+  },
+});
+
+// 手動關閉連線
+connection.close();
+
+// 檢查連線狀態
+console.log(connection.readyState); // 'connecting' | 'open' | 'closed'
+```
+
+**SSE 優勢:**
+
+- ✅ 支援自訂 Headers（解決原生 EventSource 的限制）
+- ✅ 自動處理訊息解析
+- ✅ 完整的生命週期控制
+- ✅ 適用於 AI 串流回應、即時通知等場景
+
 ### FormData 支援
 
 ```typescript
@@ -123,6 +163,26 @@ formData.append('name', 'document.pdf');
 
 const response = await api.post('/upload', formData);
 ```
+
+### Credentials 設定
+
+```typescript
+// 全域設定
+const api = createFetchClient({
+  credentials: 'include', // 允許跨域發送 Cookie
+});
+
+// 單次請求設定
+const data = await api.get('/api/data', {
+  credentials: 'same-origin', // 僅同源發送 Cookie
+});
+```
+
+**Credentials 選項:**
+
+- `'same-origin'` (預設): 僅同源請求發送認證資訊
+- `'include'`: 跨域請求也發送認證資訊
+- `'omit'`: 不發送認證資訊
 
 ## 🔧 API 參考
 
@@ -136,7 +196,8 @@ const response = await api.post('/upload', formData);
 interface CreateFetchClientProp {
   baseURL?: string; // 基礎 URL
   headers?: HeadersInit; // 預設標頭
-  timeout?: number; // 預設超時時間（毫秒）
+  timeout?: number; // 預設超時時間（毫秒，預設 10000）
+  credentials?: RequestCredentials; // Cookie 發送策略（預設 'same-origin'）
 }
 ```
 
@@ -150,11 +211,32 @@ interface CreateFetchClientProp {
   put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
   delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
 
+  // SSE 方法
+  sse(endpoint: string, options: SSEOptions): SSEConnection
+
   // 攔截器
   interceptors: {
     request: InterceptorManager<CustomRequestInit>
     response: InterceptorManager<Response>
   }
+}
+```
+
+### SSEOptions
+
+```typescript
+interface SSEOptions extends CustomRequestInit {
+  onOpen?: () => void; // 連線建立時觸發
+  onMessage: (message: SSEMessage) => void; // 收到訊息時觸發
+  onError?: (error: Error) => void; // 發生錯誤時觸發
+  onClose?: () => void; // 連線關閉時觸發
+}
+
+interface SSEMessage {
+  event?: string; // 事件類型
+  data: string; // 訊息內容
+  id?: string; // 訊息 ID
+  retry?: number; // 重試時間（毫秒）
 }
 ```
 
@@ -184,6 +266,8 @@ const api = createFetchClient({ timeout: 10000 });
 
 // 單次請求設定
 const data = await api.get('/slow-endpoint', { timeout: 30000 });
+
+// ⚠️ 注意: SSE 連線不受 timeout 限制（長連線特性）
 ```
 
 ### 錯誤處理
@@ -191,6 +275,7 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 - **HTTP 錯誤**: 自動檢查 `response.ok`，拋出相應錯誤
 - **超時錯誤**: 轉換 AbortError 為可讀的超時訊息
 - **204 No Content**: 回傳 `null`
+- **攔截器錯誤**: 可在 interceptor 中統一處理
 
 ## 🔄 與 Axios 的差異
 
@@ -202,6 +287,8 @@ const data = await api.get('/slow-endpoint', { timeout: 30000 });
 | Request/Response Interceptors | ✅             | ✅             |
 | 請求超時                      | ✅             | ✅             |
 | 自動 JSON 解析                | ✅             | ✅             |
+| SSE 支援                      | ✅             | ❌             |
+| Credentials 控制              | ✅             | ✅             |
 | Request/Response Transform    | ❌             | ✅             |
 | 上傳進度                      | ❌             | ✅             |
 
