@@ -11,6 +11,8 @@ import { buildURL } from '../utils/buildURL';
 import { parseSSEMessage } from '../utils/parseSSE';
 import { createInterceptorManager } from './interceptor';
 
+type RequestBody = string | FormData | undefined;
+
 export const createFetchClient = ({
   baseURL = '',
   headers: defaultHeaders = {},
@@ -83,6 +85,8 @@ export const createFetchClient = ({
       signal: controller.signal,
       timeout,
       isStream,
+      url: endpoint,
+      baseURL: baseURL,
     };
 
     // ------------------------------------------------------------
@@ -107,7 +111,13 @@ export const createFetchClient = ({
       // 🚀 [流程] 階段 B：發送請求 (Fetch)
       // ------------------------------------------------------------
       let response = await fetch(url, config);
-
+      // ✅ 把 config 掛載到原生 Response 物件上
+      // 這樣你的攔截器才能讀到 response.config.url
+      Object.defineProperty(response, 'config', {
+        value: config,
+        writable: false,
+        enumerable: false, // 避免被 JSON.stringify 序列化
+      });
       // 請求成功回應，清除 timeout 計時器
       if (!isStream && timeoutId !== undefined) {
         clearTimeout(timeoutId);
@@ -290,7 +300,7 @@ export const createFetchClient = ({
       options: CustomRequestInit = {},
     ): Promise<TResponse> => {
       // 準備 Body
-      let bodyToSend: string | FormData | undefined;
+      let bodyToSend: RequestBody;
 
       if (body instanceof FormData) {
         bodyToSend = body;
@@ -314,7 +324,7 @@ export const createFetchClient = ({
       options: CustomRequestInit = {},
     ): Promise<TResponse> => {
       // 準備 Body (邏輯同 POST)
-      let bodyToSend: string | FormData | undefined;
+      let bodyToSend: RequestBody;
 
       if (body instanceof FormData) {
         bodyToSend = body;
@@ -336,7 +346,7 @@ export const createFetchClient = ({
       body?: TBody,
       options: CustomRequestInit = {},
     ): Promise<TResponse> => {
-      let bodyToSend: string | FormData | undefined;
+      let bodyToSend: RequestBody;
 
       if (body instanceof FormData) {
         bodyToSend = body;

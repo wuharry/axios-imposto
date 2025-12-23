@@ -17,9 +17,16 @@ export interface CustomRequestInit extends RequestInit {
   timeout?: number;
   isStream?: boolean;
 }
-export interface InternalRequestConfig extends CustomRequestInit {
-  headers: HeadersInit;
+
+export interface CustomRequestInit extends RequestInit {
+  timeout?: number;
+  isStream?: boolean;
+  url?: string;
+  baseURL?: string;
 }
+// export interface InternalRequestConfig extends CustomRequestInit {
+//   headers: HeadersInit;
+// }
 
 export interface CreateFetchClientProp {
   baseURL?: string;
