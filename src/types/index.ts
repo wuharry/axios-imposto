@@ -204,3 +204,29 @@ export interface FetchClient {
    */
   sse: (endpoint: string, options: SSEOptions) => SSEConnection;
 }
+
+// 自定義錯誤類別，擴展內建 Error
+export class FetchClientError extends Error {
+  config: CustomRequestInit;
+  request?: Request;
+  response?: Response;
+  code?: string; // 例如 'ERR_NETWORK', 'ERR_BAD_REQUEST'
+
+  constructor(
+    message: string,
+    config: CustomRequestInit,
+    code?: string,
+    request?: Request,
+    response?: Response,
+  ) {
+    super(message);
+    this.name = 'FetchClientError';
+    this.config = config;
+    this.code = code;
+    this.request = request;
+    this.response = response;
+
+    // 修正 TypeScript繼承內建類別時的原型鏈問題
+    Object.setPrototypeOf(this, FetchClientError.prototype);
+  }
+}

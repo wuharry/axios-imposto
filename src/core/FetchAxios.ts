@@ -1,10 +1,11 @@
-import type {
-  CreateFetchClientProp,
-  CustomRequestInit,
-  ErrorResponse,
-  InterceptorManager,
-  SSEConnection,
-  SSEOptions,
+import {
+  FetchClientError,
+  type CreateFetchClientProp,
+  type CustomRequestInit,
+  type ErrorResponse,
+  type InterceptorManager,
+  type SSEConnection,
+  type SSEOptions,
 } from '../types';
 
 import { buildURL } from '../utils/buildURL';
@@ -150,7 +151,15 @@ export const createFetchClient = ({
       // * 1. 檢查 HTTP 狀態碼 (攔截器之後執行，這樣攔截器可以優先處理 401 等狀況)
       if (!response.ok) {
         const errorBody = (await response.json().catch(() => null)) as ErrorResponse | null;
-        throw new Error(errorBody?.message ?? `HTTP Error: ${response.status}`);
+        const message = errorBody?.message ?? `Request failed with status ${response.status}`;
+        // throw new Error(errorBody?.message ?? `HTTP Error: ${response.status}`);
+        throw new FetchClientError(
+          message,
+          config,
+          'ERR_BAD_RESPONSE', // 自定義錯誤代碼
+          undefined,
+          response, // 把 response 塞進去
+        );
       }
 
       // * 2. 特殊狀態碼處理 (204 No Content 回傳 null)
@@ -165,10 +174,18 @@ export const createFetchClient = ({
        * 💡 [說明] Timeout 錯誤轉換
        * Fetch 的超時會拋出 AbortError，我們將其轉換為更易讀的 Error Message
        */
+      // if ((error as Error).name === 'AbortError') {
+      //   throw new Error(`Request timeout after ${timeout} ms`);
+      // }
       if ((error as Error).name === 'AbortError') {
-        throw new Error(`Request timeout after ${timeout} ms`);
+        throw new FetchClientError(`Request timeout after ${timeout} ms`, config, 'ECONNABORTED');
       }
-      throw error;
+      // 處理既有的 FetchClientError (上面拋出的 4xx/5xx)
+      if (error instanceof FetchClientError) {
+        throw error;
+      }
+      // 處理真正的網路錯誤 (Network Error)
+      throw new FetchClientError((error as Error).message, config, 'ERR_NETWORK');
     }
   };
 
