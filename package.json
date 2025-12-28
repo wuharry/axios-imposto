@@ -22,7 +22,21 @@
     "dist",
     "README.zh-TW.md"
   ],
-  "keywords": [],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "keywords": [
+    "http",
+    "client",
+    "fetch",
+    "fetch-api",
+    "see",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "description": "",
