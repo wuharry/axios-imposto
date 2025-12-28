@@ -29,14 +29,20 @@ export default defineConfig({
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'AxiosImpostor', // UMD 模式下的全域變數名稱 (window.AxiosImpostor)
-      fileName: (format) => `axios-impostor.${format}.js`,
-      formats: ['es', 'umd'], // 同時輸出 ESM (給現代專案) 和 UMD (給舊專案/CDN)
+      fileName: (format) => {
+        if (format === 'es') return 'index.mjs';
+        if (format === 'cjs') return 'index.js';
+        return `index.${format}.js`;
+      },
+      formats: ['es', 'umd', 'cjs'],
+      // 同時輸出 ESM (給現代專案) 和 UMD (給舊專案/CDN)
     },
 
     // 📦 3. Rollup 設定 (處理依賴與輸出)
     rollupOptions: {
       // 確保外部化處理那些你不想打包進庫的依賴
       // 例如：如果你之後用了 'lodash' 但不想把它包進去，就寫在這裡
+      // 確保不打包 node_modules 裡的套件
       external: [],
 
       output: {
