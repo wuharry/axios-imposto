@@ -1,351 +1,269 @@
-[繁體中文](https://github.com/wuharry/axios-imposto/blob/main/README.zh-TW.md) | **English**
+[繁體中文](./README.zh-TW.md) | **English**
 
 # Axios Impostor 🎭
 
-A lightweight HTTP client based on Fetch API that mimics Axios core features, including `axios.create()`, interceptor mechanisms, and **SSE (Server-Sent Events)** support.
+A small HTTP client with an Axios‑like API. This README only focuses on **how to use it**, **what types exist**, and **where we recommend putting the code** in your own project.
 
-## ✨ Features
-
-- 🚀 **Built on Modern Fetch API** - No additional dependencies required
-- 🔧 **axios.create() Style** - Familiar API design
-- 🔄 **Request/Response Interceptors** - Full interceptor support
-- ⏱️ **Request Timeout Control** - Customizable timeout settings
-- 📡 **SSE Support** - Built-in Server-Sent Events streaming
-- 📝 **TypeScript Support** - Complete type definitions
-- 🎯 **Smart Content-Type Detection** - Intelligent handling of JSON and FormData
-- 🍪 **Credentials Control** - Support for Cookie and authentication settings
-- 🛡️ **Unified Error Handling** - Consistent error handling mechanism
-
-## 📦 Installation
+## Installation
 
 ```bash
 npm install axios-impostor
-```
-
-```bash
+# or
 pnpm add axios-impostor
-```
-
-```bash
+# or
 yarn add axios-impostor
 ```
 
-## 🚀 Quick Start
+---
 
-### Basic Usage
+## 1. Recommended usage pattern
+
+In your own app we recommend:
+
+1. **Create a single shared client**
+   - Put it in a file such as `src/api/client.ts`.
+   - Configure `baseURL`, `timeout`, default `headers`, and interceptors in one place.
+2. **Create small functions for each endpoint**
+   - Example: `src/api/users.ts` exports `getUser`, `createUser`, etc.
+   - Each function returns a typed value (e.g. `Promise<User>`), and internally calls `api.get<User>()`.
+3. **Handle errors close to your UI or business logic**
+   - Use the `FetchClientError` type when you want to check HTTP status, error code, or request config.
+4. **SSE usage in a separate module**
+   - For long‑lived streams (chat, notifications, AI streaming), create a module like `src/api/stream.ts` that exports helper functions using `api.sse()`.
+
+You do **not** need to know how this library is implemented internally to follow the rest of this README.
+
+---
+
+## 2. Copy‑paste example (REST + error handling)
+
+A minimal example you can drop into your project:
 
 ```typescript
-import { createFetchClient } from 'axios-impostor';
+import { createFetchClient, FetchClientError } from 'axios-impostor';
 
-// Create client instance
-const api = createFetchClient({
-  baseURL: 'https://jsonplaceholder.typicode.com',
-  headers: {
-    Authorization: 'Bearer your-token',
-    'X-Custom-Header': 'value',
-  },
-  timeout: 5000, // 5 seconds timeout
-  credentials: 'include', // Allow cross-origin cookies
-});
-
-// GET request
+// 1. Define your response types
 interface User {
   id: number;
   name: string;
   email: string;
 }
 
-const user = await api.get<User>('/users/1');
-console.log(user.name);
-
-// POST request
-const newUser = await api.post<User>('/users', {
-  name: 'John Doe',
-  email: 'john@example.com',
+// 2. Create a shared client (put this in something like src/api/client.ts)
+export const api = createFetchClient({
+  baseURL: 'https://jsonplaceholder.typicode.com',
+  timeout: 10000,
 });
 
-// PUT request (complete replacement)
-const updatedUser = await api.put<User>('/users/1', {
-  name: 'Jane Doe',
-  email: 'jane@example.com',
-  age: 25, // PUT requires all fields
-});
-
-// PATCH request (partial update)
-const partialUpdate = await api.patch<User>('/users/1', {
-  name: 'Jane Doe', // Only update name, other fields remain unchanged
-});
-
-// DELETE request
-await api.delete('/users/1');
-```
-
-### Using Interceptors
-
-```typescript
-// Request Interceptor
-api.interceptors.request.use(
-  (config) => {
-    // Do something before request is sent
-    console.log('Sending request:', config);
-
-    // Modify config
-    config.headers = {
-      ...config.headers,
-      'X-Timestamp': Date.now().toString(),
-    };
-
-    return config;
-  },
-  (error) => {
-    // Do something with request error
-    console.error('Request error:', error);
-    return Promise.reject(error);
-  },
-);
-
-// Response Interceptor
-api.interceptors.response.use(
-  (response) => {
-    // Do something with response data
-    console.log('Received response:', response);
-    return response;
-  },
-  (error) => {
-    // Do something with response error
-    if (error.message.includes('401')) {
-      // Handle unauthorized error, e.g., redirect to login
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  },
-);
-```
-
-### SSE (Server-Sent Events) Support
-
-```typescript
-// Establish SSE connection
-const connection = api.sse('/events', {
-  headers: {
-    Authorization: 'Bearer your-token',
-  },
-  onOpen: () => {
-    console.log('SSE connection established');
-  },
-  onMessage: (message) => {
-    console.log('Message received:', message);
-    // message format: { event?: string; data: string; id?: string; retry?: number }
-  },
-  onError: (error) => {
-    console.error('SSE error:', error);
-  },
-  onClose: () => {
-    console.log('SSE connection closed');
-  },
-});
-
-// Manually close connection
-connection.close();
-
-// Check connection state
-console.log(connection.readyState); // 'connecting' | 'open' | 'closed'
-```
-
-**SSE Advantages:**
-
-- ✅ Supports custom headers (solves native EventSource limitations)
-- ✅ Automatic message parsing
-- ✅ Full lifecycle control
-- ✅ Perfect for AI streaming responses, real-time notifications, etc.
-
-### FormData Support
-
-```typescript
-// Automatic FormData handling, no need to manually set Content-Type
-const formData = new FormData();
-formData.append('file', file);
-formData.append('name', 'document.pdf');
-
-const response = await api.post('/upload', formData);
-```
-
-### Credentials Configuration
-
-```typescript
-// Global configuration
-const api = createFetchClient({
-  credentials: 'include', // Allow cross-origin cookies
-});
-
-// Per-request configuration
-const data = await api.get('/api/data', {
-  credentials: 'same-origin', // Send cookies only for same-origin requests
-});
-```
-
-**Credentials Options:**
-
-- `'same-origin'` (default): Send credentials only for same-origin requests
-- `'include'`: Send credentials for cross-origin requests too
-- `'omit'`: Never send credentials
-
-## 🔧 API Reference
-
-### createFetchClient(options?)
-
-Create a new HTTP client instance.
-
-**Parameters:**
-
-```typescript
-interface CreateFetchClientProp {
-  baseURL?: string; // Base URL
-  headers?: HeadersInit; // Default headers
-  timeout?: number; // Default timeout (milliseconds, default 10000)
-  credentials?: RequestCredentials; // Cookie sending strategy (default 'same-origin')
+// 3. Wrap endpoints in small helper functions (e.g. in src/api/users.ts)
+export async function getUser(userId: number): Promise<User> {
+  return api.get<User>(`/users/${userId}`);
 }
-```
 
-**Returns:**
+export async function createUser(input: Pick<User, 'name' | 'email'>): Promise<User> {
+  return api.post<User, typeof input>('/users', input);
+}
 
-```typescript
-{
-  // HTTP methods
-  get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
-  post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
-
-  // SSE method
-  sse(endpoint: string, options: SSEOptions): SSEConnection
-
-  // Interceptors
-  interceptors: {
-    request: InterceptorManager<CustomRequestInit>
-    response: InterceptorManager<Response>
+// 4. Use helpers in your UI / services
+async function example() {
+  try {
+    const user = await getUser(1);
+    console.log('User name:', user.name);
+  } catch (error) {
+    if (error instanceof FetchClientError) {
+      console.error('Request failed:', {
+        code: error.code,
+        status: error.response?.status,
+        url: (error.config as any).url,
+      });
+    }
+    throw error;
   }
 }
 ```
 
-### HTTP Methods Description
-
-| Method | Purpose              | Body Required | Description                                                   |
-| ------ | -------------------- | ------------- | ------------------------------------------------------------- |
-| GET    | Retrieve resource    | ❌            | Used for querying data                                        |
-| POST   | Create resource      | ✅            | Used for creating new data                                    |
-| PUT    | Complete replacement | ✅            | Requires all fields; omitted fields will be removed           |
-| PATCH  | Partial update       | ✅            | Only requires fields to update; other fields remain unchanged |
-| DELETE | Delete resource      | ❌            | Used for deleting data                                        |
-
-### SSEOptions
-
-```typescript
-interface SSEOptions extends CustomRequestInit {
-  onOpen?: () => void; // Triggered when connection is established
-  onMessage: (message: SSEMessage) => void; // Triggered when message is received
-  onError?: (error: Error) => void; // Triggered when error occurs
-  onClose?: () => void; // Triggered when connection is closed
-}
-
-interface SSEMessage {
-  event?: string; // Event type
-  data: string; // Message content
-  id?: string; // Message ID
-  retry?: number; // Retry time (milliseconds)
-}
-```
-
-### Interceptor Manager
-
-```typescript
-// Register interceptor
-const id = interceptors.request.use(fulfilled, rejected);
-
-// Remove interceptor
-interceptors.request.eject(id);
-```
-
-## 🎯 Key Features
-
-### Smart Content-Type Handling
-
-- **JSON Data**: Automatically sets `Content-Type: application/json`
-- **FormData**: Lets browser automatically set correct boundary
-- **Custom Override**: Can manually specify in headers
-
-### Request Timeout Control
-
-```typescript
-// Global setting
-const api = createFetchClient({ timeout: 10000 });
-
-// Per-request setting
-const data = await api.get('/slow-endpoint', { timeout: 30000 });
-
-// ⚠️ Note: SSE connections are not subject to timeout (long-lived connection)
-```
-
-### Error Handling
-
-- **HTTP Errors**: Automatically checks `response.ok` and throws appropriate errors
-- **Timeout Errors**: Converts AbortError to readable timeout messages
-- **204 No Content**: Returns `null`
-- **Interceptor Errors**: Can be handled uniformly in interceptors
-
-## 🔄 Comparison with Axios
-
-| Feature                       | Axios Impostor  | Axios          |
-| ----------------------------- | --------------- | -------------- |
-| Base Technology               | Fetch API       | XMLHttpRequest |
-| Bundle Size                   | Lightweight     | Larger         |
-| Browser Support               | Modern Browsers | Wide Support   |
-| Request/Response Interceptors | ✅              | ✅             |
-| Request Timeout               | ✅              | ✅             |
-| Automatic JSON Parsing        | ✅              | ✅             |
-| SSE Support                   | ✅              | ❌             |
-| Credentials Control           | ✅              | ✅             |
-| PATCH Method                  | ✅              | ✅             |
-| Request/Response Transform    | ❌              | ✅             |
-| Upload Progress               | ❌              | ✅             |
-
-## 🛠️ Development
-
-```bash
-# Install dependencies
-pnpm install
-
-# Development mode
-pnpm dev
-
-# Build
-pnpm build
-
-# Test
-pnpm test
-
-# Lint
-pnpm lint
-
-# Format
-pnpm format
-```
-
-## 📄 License
-
-[0BSD License](LICENSE) - Free to use for any purpose
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit Issues and Pull Requests.
-
-1. Fork the project
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+You can start from this snippet and adjust:
+- Change `baseURL` to your API domain.
+- Add more endpoint helpers in separate files.
+- Re‑use the same `api` instance everywhere.
 
 ---
 
-If this package helps you, please give it a ⭐️ to show your support!
+## 3. Copy‑paste example (SSE streaming)
+
+For streaming responses (chat, AI, notifications):
+
+```typescript
+import { api } from './client'; // shared client from previous example
+import type { SSEMessage, SSEConnection } from 'axios-impostor';
+
+export function subscribeChat(roomId: string, onMessage: (data: unknown) => void): SSEConnection {
+  const connection = api.sse(`/chat/rooms/${roomId}/stream`, {
+    headers: {
+      Authorization: 'Bearer your-token',
+    },
+    onOpen: () => {
+      console.log('SSE connected');
+    },
+    onMessage: (message: SSEMessage) => {
+      // Many backends send JSON in `message.data`
+      try {
+        const parsed = JSON.parse(message.data);
+        onMessage(parsed);
+      } catch {
+        onMessage(message.data);
+      }
+    },
+    onError: (error) => {
+      console.error('SSE error', error);
+    },
+    onClose: () => {
+      console.log('SSE closed');
+    },
+  });
+
+  return connection;
+}
+
+// usage
+const connection = subscribeChat('room-1', (payload) => {
+  console.log('chat update:', payload);
+});
+
+// later, when you want to stop listening
+connection.close();
+```
+
+---
+
+## 4. Public API
+
+### `createFetchClient(options?: CreateFetchClientProp)`
+
+Creates a client instance you reuse across your app.
+
+**Options (`CreateFetchClientProp`):**
+- `baseURL?: string` – base URL that will be prefixed in all relative endpoints.
+- `headers?: HeadersInit` – default headers sent with every request.
+- `timeout?: number` – default timeout (ms) for non‑streaming requests.
+- `credentials?: RequestCredentials` – how cookies/auth are sent (`'omit' | 'same-origin' | 'include'`).
+
+**Return value (`FetchClient`):**
+- `get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>`
+- `post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T | null>`
+- `sse(endpoint: string, options: SSEOptions): SSEConnection`
+- `interceptors.request: InterceptorManager<CustomRequestInit>`
+- `interceptors.response: InterceptorManager<Response>`
+
+**How the methods behave:**
+- All HTTP methods **parse JSON automatically** and return the parsed value as `T`.
+- `204 No Content` resolves to **`null`**.
+- Non‑2xx statuses throw a `FetchClientError`.
+
+### `interceptors`
+
+- Use **request interceptors** for things like:
+  - Adding auth headers.
+  - Logging or tagging requests.
+- Use **response interceptors** for things like:
+  - Global 401 handling (e.g. redirect to login).
+  - Normalizing error messages.
+
+Example:
+
+```typescript
+api.interceptors.request.use((config) => {
+  config.headers = {
+    ...config.headers,
+    Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
+  };
+  return config;
+});
+```
+
+---
+
+## 5. Types and where to use them
+
+This section lists the important public types and how you would typically use them in an app.
+
+### `CustomRequestInit`
+
+Extends the built‑in `RequestInit` with:
+- `timeout?: number` – per‑request timeout (overrides client default).
+- `isStream?: boolean` – internal flag used by the client (you usually dont need to set this).
+- `url?: string` – set internally to the endpoint.
+- `baseURL?: string` – set internally to the clients base URL.
+
+**Use it when:** you want to type a function that forwards arbitrary request options into the client, e.g. helper utilities that accept `options?: CustomRequestInit`.
+
+### `FetchClient`
+
+The shape of the object returned by `createFetchClient`.
+
+**Use it when:**
+- You want to type a shared client instance: `const api: FetchClient = createFetchClient(...)`.
+- You pass the client around (e.g. dependency injection or testing).
+
+### `FetchClientError`
+
+A custom error type thrown when:
+- The request times out.
+- The network fails.
+- The server returns a non‑OK HTTP status (4xx/5xx).
+
+It extends `Error` and adds:
+- `code?: string` – e.g. `'ERR_NETWORK'`, `'ERR_BAD_RESPONSE'`, `'ECONNABORTED'`.
+- `config: CustomRequestInit` – the final request config.
+- `request?: Request` – the underlying `Request` when available.
+- `response?: Response` – the underlying `Response` when available.
+
+**Use it when:**
+- Writing error‑handling helpers.
+- Building a global error boundary.
+- Logging structured error information.
+
+### `InterceptorManager<T>` / `InterceptorHandler<T>`
+
+You normally dont construct these yourself; you get them through `api.interceptors.request` and `api.interceptors.response`.
+
+**Use them when:**
+- Adding or removing interceptors with `use` / `eject`.
+
+### `SSEMessage`
+
+Represents one SSE event from the server:
+- `data: string` – payload (often JSON string).
+- `event?: string` – event name.
+- `id?: string` – message id.
+- `retry?: number` – reconnection delay suggested by server.
+
+**Use it when:**
+- Typing your SSE handlers: `onMessage: (message: SSEMessage) => void`.
+
+### `SSEOptions`
+
+Configuration for `api.sse()`:
+- Inherits all non‑`method` fields from `CustomRequestInit` (e.g. `headers`, `credentials`).
+- Adds callbacks: `onOpen`, `onMessage`, `onError`, `onClose`.
+
+**Use it when:**
+- Exposing your own SSE helpers that simply forward options to `api.sse()`.
+
+### `SSEConnection`
+
+The object returned from `api.sse()`:
+- `close(): void` – stop the stream.
+- `readyState: 'connecting' | 'open' | 'closed'` – current connection state.
+
+**Use it when:**
+- Managing the lifecycle of a stream (e.g. in a React effect or a custom hook).
+
+---
+
+## 6. License
+
+[MIT License](LICENSE)

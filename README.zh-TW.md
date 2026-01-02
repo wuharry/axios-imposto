@@ -2,350 +2,261 @@
 
 # Axios Impostor 🎭
 
-一個基於 Fetch API 的輕量級 HTTP 客戶端，模仿 Axios 的核心功能，包含 `axios.create()`、interceptor 機制，以及 **SSE (Server-Sent Events)** 支援。
+這份說明只專注在：**怎麼用**、**有哪些型別**、**這些型別建議用在哪裡**，不會介紹專案本身的架構或技術細節。
 
-## ✨ 特性
-
-- 🚀 **基於現代 Fetch API** - 無需額外的依賴包
-- 🔧 **axios.create() 風格** - 熟悉的 API 設計
-- 🔄 **Request/Response Interceptors** - 完整的攔截器支援
-- ⏱️ **請求超時控制** - 可自訂超時時間
-- 📡 **SSE 支援** - 內建 Server-Sent Events 串流處理
-- 📝 **TypeScript 支援** - 完整的型別定義
-- 🎯 **自動 Content-Type 判斷** - 智慧處理 JSON 和 FormData
-- 🍪 **Credentials 控制** - 支援 Cookie 和認證設定
-- 🛡️ **統一錯誤處理** - 一致的錯誤處理機制
-
-## 📦 安裝
+## 安裝
 
 ```bash
 npm install axios-impostor
-```
-
-```bash
+# 或
 pnpm add axios-impostor
-```
-
-```bash
+# 或
 yarn add axios-impostor
 ```
 
-## 🚀 快速開始
+---
 
-### 基本使用
+## 1. 建議的使用方式
+
+在你的專案裡，建議這樣拆：
+
+1. **建立一個共用的 client 實例**
+   - 放在像是 `src/api/client.ts` 的檔案裡。
+   - 在這裡設定 `baseURL`、`timeout`、預設 `headers`、interceptors 等。
+2. **每個領域/模組各自一組 API 函式**
+   - 例如 `src/api/users.ts` 裡面只放「使用者相關」的 API：`getUser`、`createUser`...
+   - 這些函式回傳明確的型別（例如 `Promise<User>`），內部再呼叫 `api.get<User>()`。
+3. **錯誤處理集中在 UI 或服務層**
+   - 當需要依 HTTP 狀態碼、錯誤 code 做判斷時，使用 `FetchClientError`。
+4. **SSE 相關放在獨立模組**
+   - 例如 `src/api/stream.ts`，裡面只放用 `api.sse()` 建立串流的 helper（聊天室、通知、AI 串流等）。
+
+不需要知道這個套件內部怎麼實作，只要照下面的使用方式即可。
+
+---
+
+## 2. 可直接複製的範例（REST + 錯誤處理）
 
 ```typescript
-import { createFetchClient } from 'axios-impostor';
+import { createFetchClient, FetchClientError } from 'axios-impostor';
 
-// 創建客戶端實例
-const api = createFetchClient({
-  baseURL: 'https://jsonplaceholder.typicode.com',
-  headers: {
-    Authorization: 'Bearer your-token',
-    'X-Custom-Header': 'value',
-  },
-  timeout: 5000, // 5秒超時
-  credentials: 'include', // 允許跨域發送 Cookie
-});
-
-// GET 請求
+// 1. 定義回傳資料型別
 interface User {
   id: number;
   name: string;
   email: string;
 }
 
-const user = await api.get<User>('/users/1');
-console.log(user.name);
-
-// POST 請求
-const newUser = await api.post<User>('/users', {
-  name: 'John Doe',
-  email: 'john@example.com',
+// 2. 建立共用 client（建議放在 src/api/client.ts）
+export const api = createFetchClient({
+  baseURL: 'https://jsonplaceholder.typicode.com',
+  timeout: 10000,
 });
 
-// PUT 請求 (完整替換資源)
-const updatedUser = await api.put<User>('/users/1', {
-  name: 'Jane Doe',
-  email: 'jane@example.com',
-  age: 25, // PUT 需要提供所有欄位
-});
-
-// PATCH 請求 (部分更新資源)
-const partialUpdate = await api.patch<User>('/users/1', {
-  name: 'Jane Doe', // 只更新 name，其他欄位保持不變
-});
-
-// DELETE 請求
-await api.delete('/users/1');
-```
-
-### 使用 Interceptors
-
-```typescript
-// Request Interceptor
-api.interceptors.request.use(
-  (config) => {
-    // 在發送請求前做些什麼
-    console.log('發送請求:', config);
-
-    // 可以修改配置
-    config.headers = {
-      ...config.headers,
-      'X-Timestamp': Date.now().toString(),
-    };
-
-    return config;
-  },
-  (error) => {
-    // 對請求錯誤做些什麼
-    console.error('請求錯誤:', error);
-    return Promise.reject(error);
-  },
-);
-
-// Response Interceptor
-api.interceptors.response.use(
-  (response) => {
-    // 對響應數據做些什麼
-    console.log('收到響應:', response);
-    return response;
-  },
-  (error) => {
-    // 對響應錯誤做些什麼
-    if (error.message.includes('401')) {
-      // 處理未授權錯誤，例如重新登入
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  },
-);
-```
-
-### SSE (Server-Sent Events) 支援
-
-```typescript
-// 建立 SSE 連線
-const connection = api.sse('/events', {
-  headers: {
-    Authorization: 'Bearer your-token',
-  },
-  onOpen: () => {
-    console.log('SSE 連線已建立');
-  },
-  onMessage: (message) => {
-    console.log('收到訊息:', message);
-    // message 格式: { event?: string; data: string; id?: string; retry?: number }
-  },
-  onError: (error) => {
-    console.error('SSE 錯誤:', error);
-  },
-  onClose: () => {
-    console.log('SSE 連線已關閉');
-  },
-});
-
-// 手動關閉連線
-connection.close();
-
-// 檢查連線狀態
-console.log(connection.readyState); // 'connecting' | 'open' | 'closed'
-```
-
-**SSE 優勢:**
-
-- ✅ 支援自訂 Headers（解決原生 EventSource 的限制）
-- ✅ 自動處理訊息解析
-- ✅ 完整的生命週期控制
-- ✅ 適用於 AI 串流回應、即時通知等場景
-
-### FormData 支援
-
-```typescript
-// 自動處理 FormData，無需手動設定 Content-Type
-const formData = new FormData();
-formData.append('file', file);
-formData.append('name', 'document.pdf');
-
-const response = await api.post('/upload', formData);
-```
-
-### Credentials 設定
-
-```typescript
-// 全域設定
-const api = createFetchClient({
-  credentials: 'include', // 允許跨域發送 Cookie
-});
-
-// 單次請求設定
-const data = await api.get('/api/data', {
-  credentials: 'same-origin', // 僅同源發送 Cookie
-});
-```
-
-**Credentials 選項:**
-
-- `'same-origin'` (預設): 僅同源請求發送認證資訊
-- `'include'`: 跨域請求也發送認證資訊
-- `'omit'`: 不發送認證資訊
-
-## 🔧 API 參考
-
-### createFetchClient(options?)
-
-創建一個新的 HTTP 客戶端實例。
-
-**參數:**
-
-```typescript
-interface CreateFetchClientProp {
-  baseURL?: string; // 基礎 URL
-  headers?: HeadersInit; // 預設標頭
-  timeout?: number; // 預設超時時間（毫秒，預設 10000）
-  credentials?: RequestCredentials; // Cookie 發送策略（預設 'same-origin'）
+// 3. 針對單一資源寫小函式（建議放在 src/api/users.ts）
+export async function getUser(userId: number): Promise<User> {
+  return api.get<User>(`/users/${userId}`);
 }
-```
 
-**回傳值:**
+export async function createUser(input: Pick<User, 'name' | 'email'>): Promise<User> {
+  return api.post<User, typeof input>('/users', input);
+}
 
-```typescript
-{
-  // HTTP 方法
-  get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
-  post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>
-  delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T>
-
-  // SSE 方法
-  sse(endpoint: string, options: SSEOptions): SSEConnection
-
-  // 攔截器
-  interceptors: {
-    request: InterceptorManager<CustomRequestInit>
-    response: InterceptorManager<Response>
+// 4. 在 UI / service 內使用
+async function example() {
+  try {
+    const user = await getUser(1);
+    console.log('User name:', user.name);
+  } catch (error) {
+    if (error instanceof FetchClientError) {
+      console.error('請求失敗', {
+        code: error.code,
+        status: error.response?.status,
+        url: (error.config as any).url,
+      });
+    }
+    throw error;
   }
 }
 ```
 
-### HTTP Methods 說明
-
-| 方法   | 用途         | Body 必需 | 說明                                   |
-| ------ | ------------ | --------- | -------------------------------------- |
-| GET    | 獲取資源     | ❌        | 用於查詢資料                           |
-| POST   | 創建資源     | ✅        | 用於新增資料                           |
-| PUT    | 完整替換資源 | ✅        | 需提供所有欄位，未提供的欄位會被移除   |
-| PATCH  | 部分更新資源 | ✅        | 只需提供要更新的欄位，其他欄位保持不變 |
-| DELETE | 刪除資源     | ❌        | 用於刪除資料                           |
-
-### SSEOptions
-
-```typescript
-interface SSEOptions extends CustomRequestInit {
-  onOpen?: () => void; // 連線建立時觸發
-  onMessage: (message: SSEMessage) => void; // 收到訊息時觸發
-  onError?: (error: Error) => void; // 發生錯誤時觸發
-  onClose?: () => void; // 連線關閉時觸發
-}
-
-interface SSEMessage {
-  event?: string; // 事件類型
-  data: string; // 訊息內容
-  id?: string; // 訊息 ID
-  retry?: number; // 重試時間（毫秒）
-}
-```
-
-### Interceptor Manager
-
-```typescript
-// 註冊攔截器
-const id = interceptors.request.use(fulfilled, rejected);
-
-// 移除攔截器
-interceptors.request.eject(id);
-```
-
-## 🎯 特色功能
-
-### 智慧 Content-Type 處理
-
-- **JSON 資料**: 自動設定 `Content-Type: application/json`
-- **FormData**: 讓瀏覽器自動設定正確的 boundary
-- **自訂覆蓋**: 可在 headers 中手動指定
-
-### 請求超時控制
-
-```typescript
-// 全域設定
-const api = createFetchClient({ timeout: 10000 });
-
-// 單次請求設定
-const data = await api.get('/slow-endpoint', { timeout: 30000 });
-
-// ⚠️ 注意: SSE 連線不受 timeout 限制（長連線特性）
-```
-
-### 錯誤處理
-
-- **HTTP 錯誤**: 自動檢查 `response.ok`，拋出相應錯誤
-- **超時錯誤**: 轉換 AbortError 為可讀的超時訊息
-- **204 No Content**: 回傳 `null`
-- **攔截器錯誤**: 可在 interceptor 中統一處理
-
-## 🔄 與 Axios 的差異
-
-| 功能                          | Axios Impostor | Axios          |
-| ----------------------------- | -------------- | -------------- |
-| 基底技術                      | Fetch API      | XMLHttpRequest |
-| 包大小                        | 輕量           | 較大           |
-| 瀏覽器支援                    | 現代瀏覽器     | 廣泛支援       |
-| Request/Response Interceptors | ✅             | ✅             |
-| 請求超時                      | ✅             | ✅             |
-| 自動 JSON 解析                | ✅             | ✅             |
-| SSE 支援                      | ✅             | ❌             |
-| Credentials 控制              | ✅             | ✅             |
-| PATCH 方法                    | ✅             | ✅             |
-| Request/Response Transform    | ❌             | ✅             |
-| 上傳進度                      | ❌             | ✅             |
-
-## 🛠️ 開發
-
-```bash
-# 安裝依賴
-pnpm install
-
-# 開發模式
-pnpm dev
-
-# 建置
-pnpm build
-
-# 測試
-pnpm test
-
-# 程式碼檢查
-pnpm lint
-
-# 程式碼格式化
-pnpm format
-```
-
-## 📄 授權
-
-[0BSD License](LICENSE) - 可自由使用於任何目的
-
-## 🤝 貢獻
-
-歡迎提交 Issue 和 Pull Request！
-
-1. Fork 本專案
-2. 創建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交變更 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 開啟 Pull Request
+這個範例可以直接複製使用，只要：
+- 把 `baseURL` 改成你自己的 API 網域。
+- 在不同檔案中依照資源拆分（例如 `users.ts`、`posts.ts`）。
+- 所有程式共用同一個 `api` 實例。
 
 ---
 
-如果這個套件對您有幫助，請給個 ⭐️ 支持一下！
+## 3. 可直接複製的範例（SSE 串流）
+
+```typescript
+import { api } from './client'; // 從前一個範例共用同一個 client
+import type { SSEMessage, SSEConnection } from 'axios-impostor';
+
+export function subscribeChat(
+  roomId: string,
+  onMessage: (data: unknown) => void,
+): SSEConnection {
+  const connection = api.sse(`/chat/rooms/${roomId}/stream`, {
+    headers: {
+      Authorization: 'Bearer your-token',
+    },
+    onOpen: () => {
+      console.log('SSE 已連線');
+    },
+    onMessage: (message: SSEMessage) => {
+      // 很多後端會把 JSON 字串塞在 message.data 內
+      try {
+        const parsed = JSON.parse(message.data);
+        onMessage(parsed);
+      } catch {
+        onMessage(message.data);
+      }
+    },
+    onError: (error) => {
+      console.error('SSE 錯誤', error);
+    },
+    onClose: () => {
+      console.log('SSE 已關閉');
+    },
+  });
+
+  return connection;
+}
+
+// 使用方式
+const connection = subscribeChat('room-1', (payload) => {
+  console.log('聊天更新:', payload);
+});
+
+// 需要停止監聽時
+connection.close();
+```
+
+---
+
+## 4. Public API 總覽
+
+### `createFetchClient(options?: CreateFetchClientProp)`
+
+建立一個可重複使用的 HTTP client 實例。
+
+**選項（`CreateFetchClientProp`）:**
+- `baseURL?: string` – 所有相對路徑 endpoint 都會加在這個前面。
+- `headers?: HeadersInit` – 每個請求都會帶上的預設 headers。
+- `timeout?: number` – 預設超時時間（毫秒）。
+- `credentials?: RequestCredentials` – Cookie / 認證傳送策略（`'omit' | 'same-origin' | 'include'`）。
+
+**回傳值（`FetchClient`）包含：**
+- `get<T>(endpoint: string, options?: CustomRequestInit): Promise<T>`
+- `post<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `put<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `patch<T, B>(endpoint: string, body?: B, options?: CustomRequestInit): Promise<T>`
+- `delete<T>(endpoint: string, options?: CustomRequestInit): Promise<T | null>`
+- `sse(endpoint: string, options: SSEOptions): SSEConnection`
+- `interceptors.request: InterceptorManager<CustomRequestInit>`
+- `interceptors.response: InterceptorManager<Response>`
+
+**方法行為說明：**
+- 所有 HTTP 方法都會嘗試將回應 **解析為 JSON**，並以型別 `T` 回傳。
+- 若狀態碼是 `204 No Content`，回傳值為 **`null`**。
+- 非 2xx 狀態碼會丟出 `FetchClientError`。
+
+### `interceptors`
+
+- **Request interceptors**：適合用來加上 Token、追蹤 ID、log 等。
+- **Response interceptors**：適合用來統一處理 401、顯示全域錯誤訊息等。
+
+範例：
+
+```typescript
+api.interceptors.request.use((config) => {
+  config.headers = {
+    ...config.headers,
+    Authorization: `Bearer ${localStorage.getItem('token') ?? ''}`,
+  };
+  return config;
+});
+```
+
+---
+
+## 5. 型別說明與建議放置位置
+
+### `CustomRequestInit`
+
+在原生 `RequestInit` 上額外加上：
+- `timeout?: number` – 單次請求專用的超時時間，會覆蓋 client 預設值。
+- `isStream?: boolean` – 內部使用的旗標，通常不需要自己設定。
+- `url?: string` – 由 client 內部填入實際請求的 endpoint。
+- `baseURL?: string` – 由 client 內部填入使用的 baseURL。
+
+**適合用在：**
+- 寫工具函式時，讓參數 `options?: CustomRequestInit` 能完全轉給 `api` 來使用。
+
+### `FetchClient`
+
+`createFetchClient` 回傳物件的型別。
+
+**適合用在：**
+- 宣告共用 client：`const api: FetchClient = createFetchClient(...)`。
+- 需要把 client 注入到 service / hook / 測試時，作為參數型別使用。
+
+### `FetchClientError`
+
+當以下情況發生時會丟出的錯誤型別：
+- 請求逾時。
+- 網路錯誤。
+- 伺服器回傳非 2xx 狀態碼（4xx / 5xx）。
+
+比內建 `Error` 多出：
+- `code?: string` – 例如 `'ERR_NETWORK'`、`'ERR_BAD_RESPONSE'`、`'ECONNABORTED'`。
+- `config: CustomRequestInit` – 最後實際送出的設定。
+- `request?: Request` – 底層的 `Request` 物件（有的環境才會有）。
+- `response?: Response` – 底層的 `Response` 物件。
+
+**適合用在：**
+- 全域錯誤處理（例如 React Error Boundary 或 toast 通知）。
+- 寫 log / 監控系統時，收集錯誤相關資訊。
+
+### `InterceptorManager<T>` / `InterceptorHandler<T>`
+
+你不需要自己 new，只會透過 `api.interceptors.request` / `api.interceptors.response` 使用。
+
+**適合用在：**
+- 呼叫 `use` 新增攔截器、`eject` 移除攔截器時，作為回傳 ID 的型別與說明參考。
+
+### `SSEMessage`
+
+代表一則從 SSE 串流來的訊息：
+- `data: string` – 訊息內容（常見是 JSON 字串）。
+- `event?: string` – 事件名稱。
+- `id?: string` – 訊息 ID。
+- `retry?: number` – 伺服器建議的重試間隔（毫秒）。
+
+**適合用在：**
+- 型別標註 SSE handler：`onMessage: (message: SSEMessage) => void`。
+
+### `SSEOptions`
+
+`api.sse()` 使用的設定物件：
+- 繼承 `CustomRequestInit`（但移除 `method`，因為 SSE 一定是 GET）。
+- 多了：`onOpen`、`onMessage`、`onError`、`onClose` 四個 callback。
+
+**適合用在：**
+- 你自己包一層 SSE helper 函式時，讓參數型別直接用 `SSEOptions`。
+
+### `SSEConnection`
+
+`api.sse()` 回傳的控制物件：
+- `close(): void` – 手動關閉連線。
+- `readyState: 'connecting' | 'open' | 'closed'` – 目前連線狀態。
+
+**適合用在：**
+- React / Vue / Svelte 等框架中的 effect 或 hook，管理串流生命週期。
+
+---
+
+## 6. 授權
+
+[MIT License](LICENSE)
